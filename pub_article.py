@@ -2,6 +2,7 @@
 
 import os
 import json
+import html
 import urllib
 import argparse
 import requests
@@ -13,6 +14,7 @@ ACESS_TOKEN_API_URL = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client
 MATERIAL_COUNT_API_URL = "https://api.weixin.qq.com/cgi-bin/material/get_materialcount?access_token={ACCESS_TOKEN}"
 MATERIAL_LIST_API_URL = "https://api.weixin.qq.com/cgi-bin/material/batchget_material?access_token={ACCESS_TOKEN}"
 MATERIAL_ADD_API_URL = "https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={ACCESS_TOKEN}&type={TYPE}"
+MATERIAL_DEL_API_URL = "https://api.weixin.qq.com/cgi-bin/material/del_material?access_token={ACCESS_TOKEN}"
 MATERIAL_NEWS_API_URL = "https://api.weixin.qq.com/cgi-bin/material/add_news?access_token={ACCESS_TOKEN}"
 IMAGE_UPLOAD_API_URL = "https://api.weixin.qq.com/cgi-bin/media/uploadimg?access_token={ACCESS_TOKEN}"
 
@@ -39,7 +41,8 @@ def find_all_images_in_md(markdown_data):
 
 def ensure_success(res_json):
     if "errcode" in res_json:
-        raise Exception(res_json)
+        if not res_json["errcode"] == 0:
+            raise Exception(res_json)
 
 def get_res_body_json(response):
     res_json = response.json()
@@ -114,6 +117,15 @@ def upload_image(access_token, image_file):
         response = requests.post(api_url, files=media)
         return get_res_body_json(response)
 
+def remove_image(access_token, media_id):
+    api_url = MATERIAL_DEL_API_URL.format(
+        ACCESS_TOKEN=access_token
+    )
+    response = requests.post(api_url, json = {
+        "media_id":media_id
+    })
+    return get_res_body_json(response)
+
 def upload_article(access_token, markdown_text, title, thumb_media_id, ):
     api_url = MATERIAL_NEWS_API_URL.format(
         ACCESS_TOKEN = access_token
@@ -128,6 +140,10 @@ def upload_article(access_token, markdown_text, title, thumb_media_id, ):
         }]
     }, ensure_ascii=False).encode('utf-8'))
     return get_res_body_json(response)
+
+def markdown_to_html(markdown_text):
+    md = markdown.Markdown(extensions=[ImgExtExtension()])
+    return md.convert(markdown_text)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Publish articles to WeChat "
@@ -147,21 +163,34 @@ if __name__ == '__main__':
         index_dirname = os.path.dirname(args.index_file)
         markdown_data = inf.read()
         images = find_all_images_in_md(markdown_data)
-        # 使用这个接口“上传图文消息内的图片获取URL“而不是上传到素材库
+        # These images won't be uploaded to material, so they can not be queried
+        #   through material API.
+        try:
+            with open(os.path.join(index_dirname, "uploaded_imgs.json"), 'r') as fh:
+                uploaded_imgs = json.load(fh)
+        except FileNotFoundError:
+            uploaded_imgs = dict()
+
         for image in images:
-            existed_img = query_image(os.path.basename(image), access_token)
-            if existed_img:
-                print("Image existed in your account: %s" % image)
-                img_url = existed_img["url"]
+            if image in uploaded_imgs:
+                # Get img url from cache
+                print("Image has been uploaded: %s" % image)
+                img_url = uploaded_imgs[image]
                 print(img_url)
                 markdown_data = markdown_data.replace(image, img_url)
             else:
+                # Upload img and cache url
                 print("Uploading image: %s" % image)
                 img_json = upload_image(access_token, 
                     os.path.join(index_dirname, image))
                 img_url = img_json["url"]
+                uploaded_imgs[image] = img_url
                 print(img_url)
                 markdown_data = markdown_data.replace(image, img_url)
-
-        upload_article(access_token, markdown_data, args.title, 
-            query_image("paper-3033204_1280.jpg", access_token)["media_id"])
+        # Write image url cache
+        with open(os.path.join(index_dirname, "uploaded_imgs.json"), 'w') as fh:
+            json.dump(uploaded_imgs, fh)
+        # Write processed markdown file
+        with open(os.path.join(index_dirname, "processed.md"), 'w') as f:
+            f.write(markdown_data)
+        
