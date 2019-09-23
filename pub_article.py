@@ -1,11 +1,38 @@
 #!/usr/bin/env python3
 
+import os
+import urllib
 import argparse
 import requests
+import markdown
+from markdown.treeprocessors import Treeprocessor
+from markdown.extensions import Extension
 
 ACESS_TOKEN_API_URL = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APPID}&secret={APPSECRET}"
-TOTAL_MATERIAL_API_URL = "https://api.weixin.qq.com/cgi-bin/material/get_materialcount?access_token={ACCESS_TOKEN}"
+MATERIAL_COUNT_API_URL = "https://api.weixin.qq.com/cgi-bin/material/get_materialcount?access_token={ACCESS_TOKEN}"
 MATERIAL_LIST_API_URL = "https://api.weixin.qq.com/cgi-bin/material/batchget_material?access_token={ACCESS_TOKEN}"
+MATERIAL_ADD_API_URL = "https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={ACCESS_TOKEN}&type={TYPE}"
+
+# First create the treeprocessor
+
+class ImgExtractor(Treeprocessor):
+    def run(self, doc):
+        "Find all images and append to markdown.images. "
+        self.md.images = []
+        for image in doc.findall('.//img'):
+            self.md.images.append(image.get('src'))
+
+# Then tell markdown about it
+
+class ImgExtExtension(Extension):
+    def extendMarkdown(self, md, md_globals):
+        img_ext = ImgExtractor(md)
+        md.treeprocessors.add('imgext', img_ext, '>inline')
+
+def find_all_images_in_md(markdown_data):
+    md = markdown.Markdown(extensions=[ImgExtExtension()])
+    md.convert(markdown_data)
+    return md.images
 
 def ensure_success(res_json):
     if "errcode" in res_json:
@@ -41,7 +68,7 @@ def find_image_media_id(image_name, item_json_array):
 
 def query_image(image_name, access_token):
     # Get total image count
-    api_url = TOTAL_MATERIAL_API_URL.format(ACCESS_TOKEN=access_token)
+    api_url = MATERIAL_COUNT_API_URL.format(ACCESS_TOKEN=access_token)
     response = requests.get(url=api_url)
     res_json = get_res_body_json(response)
     image_count = res_json["image_count"]
@@ -65,6 +92,16 @@ def query_image(image_name, access_token):
 
     return None
 
+def upload_image(image_file, access_token):
+    api_url = MATERIAL_ADD_API_URL.format(
+        ACCESS_TOKEN = access_token,
+        TYPE = "image"
+    )
+    with open(image_file, "rb") as imgf:
+        media = {"media": imgf}
+        response = requests.post(api_url, files=media)
+        return get_res_body_json(response)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Publish articles to WeChat "
         "official account.")
@@ -77,3 +114,19 @@ if __name__ == '__main__':
     identity = get_appid_secret(args.appid_file)
     access_token = get_access_token(identity)
     query_image("Windows_Typora_Setting.png", access_token)
+    # Upload markdown images
+    with open(args.index_file) as inf:
+        index_dirname = os.path.dirname(args.index_file)
+        markdown_data = inf.read()
+        images = find_all_images_in_md(markdown_data)
+        for image in images:
+            existed_img = query_image(os.path.basename(image), access_token)
+            if existed_img:
+                print("Image existed in your account: %s" % image)
+                img_url = existed_img["url"]
+                print(img_url)
+            else:
+                print("Uploading image: %s" % image)
+                img_json = upload_image(os.path.join(index_dirname, image), access_token)
+                img_url = img_json["url"]
+                print(img_url)
