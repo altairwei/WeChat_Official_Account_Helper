@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import json
 import urllib
 import argparse
 import requests
@@ -12,6 +13,8 @@ ACESS_TOKEN_API_URL = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client
 MATERIAL_COUNT_API_URL = "https://api.weixin.qq.com/cgi-bin/material/get_materialcount?access_token={ACCESS_TOKEN}"
 MATERIAL_LIST_API_URL = "https://api.weixin.qq.com/cgi-bin/material/batchget_material?access_token={ACCESS_TOKEN}"
 MATERIAL_ADD_API_URL = "https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={ACCESS_TOKEN}&type={TYPE}"
+MATERIAL_NEWS_API_URL = "https://api.weixin.qq.com/cgi-bin/material/add_news?access_token={ACCESS_TOKEN}"
+IMAGE_UPLOAD_API_URL = "https://api.weixin.qq.com/cgi-bin/media/uploadimg?access_token={ACCESS_TOKEN}"
 
 # First create the treeprocessor
 
@@ -92,7 +95,7 @@ def query_image(image_name, access_token):
 
     return None
 
-def upload_image(image_file, access_token):
+def upload_image_to_material(access_token, image_file):
     api_url = MATERIAL_ADD_API_URL.format(
         ACCESS_TOKEN = access_token,
         TYPE = "image"
@@ -102,11 +105,36 @@ def upload_image(image_file, access_token):
         response = requests.post(api_url, files=media)
         return get_res_body_json(response)
 
+def upload_image(access_token, image_file):
+    api_url = IMAGE_UPLOAD_API_URL.format(
+        ACCESS_TOKEN = access_token
+    )
+    with open(image_file, "rb") as imgf:
+        media = {"media": imgf}
+        response = requests.post(api_url, files=media)
+        return get_res_body_json(response)
+
+def upload_article(access_token, markdown_text, title, thumb_media_id, ):
+    api_url = MATERIAL_NEWS_API_URL.format(
+        ACCESS_TOKEN = access_token
+    )
+    response = requests.post(api_url, data=json.dumps({
+        "articles": [{
+            "title": title,
+            "thumb_media_id": thumb_media_id,
+            "show_cover_pic": 0,
+            "content": markdown_text,
+            "content_source_url": "",
+        }]
+    }, ensure_ascii=False).encode('utf-8'))
+    return get_res_body_json(response)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Publish articles to WeChat "
         "official account.")
     parser.add_argument("-i", "--appid-file", default="appid.txt",
         help="Your account identity.")
+    parser.add_argument("-t", "--title", help="Your account identity.")
     parser.add_argument("index_file", help="The index file that contains the"
         " article to be published.")
     args = parser.parse_args()
@@ -119,14 +147,21 @@ if __name__ == '__main__':
         index_dirname = os.path.dirname(args.index_file)
         markdown_data = inf.read()
         images = find_all_images_in_md(markdown_data)
+        # 使用这个接口“上传图文消息内的图片获取URL“而不是上传到素材库
         for image in images:
             existed_img = query_image(os.path.basename(image), access_token)
             if existed_img:
                 print("Image existed in your account: %s" % image)
                 img_url = existed_img["url"]
                 print(img_url)
+                markdown_data = markdown_data.replace(image, img_url)
             else:
                 print("Uploading image: %s" % image)
-                img_json = upload_image(os.path.join(index_dirname, image), access_token)
+                img_json = upload_image(access_token, 
+                    os.path.join(index_dirname, image))
                 img_url = img_json["url"]
                 print(img_url)
+                markdown_data = markdown_data.replace(image, img_url)
+
+        upload_article(access_token, markdown_data, args.title, 
+            query_image("paper-3033204_1280.jpg", access_token)["media_id"])
