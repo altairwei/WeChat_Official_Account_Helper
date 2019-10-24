@@ -5,15 +5,17 @@ import json
 import html
 import urllib
 import argparse
+import click
 import requests
 import markdown
 from markdown.treeprocessors import Treeprocessor
 from markdown.extensions import Extension
 
-from .api.wechat.material import get_access_token, query_image, upload_image
+from wizpublishtool.api.wechat.material import (
+    get_access_token, query_image, upload_image)
+
 
 # First create the treeprocessor
-
 class ImgExtractor(Treeprocessor):
     def run(self, doc):
         "Find all images and append to markdown.images. "
@@ -21,17 +23,19 @@ class ImgExtractor(Treeprocessor):
         for image in doc.findall('.//img'):
             self.md.images.append(image.get('src'))
 
-# Then tell markdown about it
 
+# Then tell markdown about it
 class ImgExtExtension(Extension):
     def extendMarkdown(self, md, md_globals):
         img_ext = ImgExtractor(md)
         md.treeprocessors.add('imgext', img_ext, '>inline')
 
+
 def find_all_images_in_md(markdown_data):
     md = markdown.Markdown(extensions=[ImgExtExtension()])
     md.convert(markdown_data)
     return md.images
+
 
 def get_appid_secret(appid_file):
     with open(appid_file, "r") as apf:
@@ -39,9 +43,11 @@ def get_appid_secret(appid_file):
         AppSecret = apf.readline().strip()
     return AppID, AppSecret
 
+
 def markdown_to_html(markdown_text):
     md = markdown.Markdown(extensions=[ImgExtExtension()])
     return md.convert(markdown_text)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -50,7 +56,8 @@ if __name__ == '__main__':
                         help="Your account identity.")
     parser.add_argument("-t", "--title", help="Your account identity.")
     parser.add_argument(
-        "index_file", help="The index file that contains the article to be published.")
+        "index_file",
+        help="The index file that contains the article to be published.")
     args = parser.parse_args()
 
     identity = get_appid_secret(args.appid_file)
@@ -78,8 +85,8 @@ if __name__ == '__main__':
             else:
                 # Upload img and cache url
                 print("Uploading image: %s" % image)
-                img_json = upload_image(access_token, 
-                    os.path.join(index_dirname, image))
+                img_json = upload_image(access_token,
+                                        os.path.join(index_dirname, image))
                 img_url = img_json["url"]
                 uploaded_imgs[image] = img_url
                 print(img_url)
@@ -90,4 +97,3 @@ if __name__ == '__main__':
         # Write processed markdown file
         with open(os.path.join(index_dirname, "processed.md"), 'w') as f:
             f.write(markdown_data)
-        

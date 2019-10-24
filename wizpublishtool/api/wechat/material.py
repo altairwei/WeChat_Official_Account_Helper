@@ -8,22 +8,25 @@ MATERIAL_DEL_API_URL = "https://api.weixin.qq.com/cgi-bin/material/del_material?
 MATERIAL_NEWS_API_URL = "https://api.weixin.qq.com/cgi-bin/material/add_news?access_token={ACCESS_TOKEN}"
 IMAGE_UPLOAD_API_URL = "https://api.weixin.qq.com/cgi-bin/media/uploadimg?access_token={ACCESS_TOKEN}"
 
+
 def ensure_success(res_json):
     if "errcode" in res_json:
         if not res_json["errcode"] == 0:
             raise Exception(res_json)
+
 
 def get_res_body_json(response):
     res_json = response.json()
     ensure_success(res_json)
     return res_json
 
+
 def find_image_media_id(image_name, item_json_array):
     for item in item_json_array:
         if item["name"] == image_name:
             return item
-    
     return None
+
 
 def get_access_token(identity):
     api_url = ACESS_TOKEN_API_URL.format(
@@ -34,6 +37,7 @@ def get_access_token(identity):
     res_json = get_res_body_json(response)
 
     return res_json["access_token"]
+
 
 def query_image(image_name, access_token):
     # Get total image count
@@ -46,7 +50,7 @@ def query_image(image_name, access_token):
     item_count = 0
     api_url = MATERIAL_LIST_API_URL.format(ACCESS_TOKEN=access_token)
     while offset < image_count:
-        response = requests.post(api_url, json = {
+        response = requests.post(api_url, json={
             "type": "image",
             "offset": offset,
             "count": 20
@@ -61,37 +65,41 @@ def query_image(image_name, access_token):
 
     return None
 
+
 def upload_image_to_material(access_token, image_file):
     api_url = MATERIAL_ADD_API_URL.format(
-        ACCESS_TOKEN = access_token,
-        TYPE = "image"
+        ACCESS_TOKEN=access_token,
+        TYPE="image"
     )
     with open(image_file, "rb") as imgf:
         media = {"media": imgf}
         response = requests.post(api_url, files=media)
         return get_res_body_json(response)
 
+
 def upload_image(access_token, image_file):
     api_url = IMAGE_UPLOAD_API_URL.format(
-        ACCESS_TOKEN = access_token
+        ACCESS_TOKEN=access_token
     )
     with open(image_file, "rb") as imgf:
         media = {"media": imgf}
         response = requests.post(api_url, files=media)
         return get_res_body_json(response)
+
 
 def remove_image(access_token, media_id):
     api_url = MATERIAL_DEL_API_URL.format(
         ACCESS_TOKEN=access_token
     )
-    response = requests.post(api_url, json = {
-        "media_id":media_id
+    response = requests.post(api_url, json={
+        "media_id": media_id
     })
     return get_res_body_json(response)
 
+
 def upload_article(access_token, markdown_text, title, thumb_media_id, ):
     api_url = MATERIAL_NEWS_API_URL.format(
-        ACCESS_TOKEN = access_token
+        ACCESS_TOKEN=access_token
     )
     response = requests.post(api_url, data=json.dumps({
         "articles": [{
@@ -103,3 +111,19 @@ def upload_article(access_token, markdown_text, title, thumb_media_id, ):
         }]
     }, ensure_ascii=False).encode('utf-8'))
     return get_res_body_json(response)
+
+
+class Media(object):
+    def __init__(self):
+        register_openers()
+
+    def upload(self, accessToken, filePath, mediaType):
+        openFile = open(filePath, "rb")
+        param = {'media': openFile}
+        postData, postHeaders = poster.encode.multipart_encode(param)
+
+        postUrl = "https://api.weixin.qq.com/cgi-bin/media/upload?access_token=%s&type=%s" % (
+            accessToken, mediaType)
+        request = urllib2.Request(postUrl, postData, postHeaders)
+        urlResp = urllib2.urlopen(request)
+        print urlResp.read()
