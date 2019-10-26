@@ -1,34 +1,35 @@
 import urllib
 import time
 import json
+import requests
+
+from wizpublishtool.api.wechat.wechat_resp import WechatResp
+
+ACESS_TOKEN_API_URL = (
+    "https://api.weixin.qq.com/cgi-bin/token?grant_type="
+    "client_credential&appid={APPID}&secret={APPSECRET}")
 
 
 class AccessToken(object):
-    def __init__(self):
+    def __init__(self, appId, appSecret):
+        self.__appId = appId
+        self.__appSecret = appSecret
         self.__accessToken = ''
-        self.__leftTime = 0
+        self.__expiredTime = 0
 
-        def __real_get_access_token(self):
-            appId = "xxxxx"
-            appSecret = "xxxxx"
-            postUrl = (
-                "https://api.weixin.qq.com/cgi-bin/token?grant_type="
-                "client_credential&appid=%s&secret=%s" %
-                (appId, appSecret))
-            urlResp = urllib.urlopen(postUrl)
-            urlResp = json.loads(urlResp.read())
-            self.__accessToken = urlResp['access_token']
-            self.__leftTime = urlResp['expires_in']
+    def __real_get_access_token(self):
+        postUrl = ACESS_TOKEN_API_URL.format(
+            APPID=self.__appId,
+            APPSECRET=self.__appSecret
+        )
+        resp = WechatResp(requests.get(url=postUrl))
+        result = resp.json()
+        self.__accessToken = result['access_token']
+        # Set expired time to two hours (7200 seconds) later
+        self.__expiredTime = time.time() + int(result['expires_in'])
 
-        def get_access_token(self):
-            if self.__leftTime < 10:
-                self.__real_get_access_token()
-                return self.__accessToken
-
-        def run(self):
-            while(True):
-                if self.__leftTime > 10:
-                    time.sleep(2)
-                    self.__leftTime -= 2
-                else:
-                    self.__real_get_access_token()
+    def get_access_token(self):
+        # Check if the token has expired
+        if self.__expiredTime < time.time():
+            self.__real_get_access_token()
+        return self.__accessToken

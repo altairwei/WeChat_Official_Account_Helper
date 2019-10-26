@@ -7,74 +7,57 @@ import urllib
 import argparse
 import click
 import requests
-import markdown
-from markdown.treeprocessors import Treeprocessor
-from markdown.extensions import Extension
 
 from wizpublishtool.api.wechat.material import (
     get_access_token, query_image, upload_image)
+from wizpublishtool.api.wechat.access_token import AccessToken
+from wizpublishtool.format.markdown import find_all_images_in_md
 
 
-# First create the treeprocessor
-class ImgExtractor(Treeprocessor):
-    def run(self, doc):
-        "Find all images and append to markdown.images. "
-        self.md.images = []
-        for image in doc.findall('.//img'):
-            self.md.images.append(image.get('src'))
+@click.group()
+def wizpub():
+    pass
 
 
-# Then tell markdown about it
-class ImgExtExtension(Extension):
-    def extendMarkdown(self, md, md_globals):
-        img_ext = ImgExtractor(md)
-        md.treeprocessors.add('imgext', img_ext, '>inline')
+@wizpub.group()
+@click.option(
+    "-i", "--appid-file", default="appid.txt", type=click.File(mode="r"))
+@click.pass_context
+def wechat(ctx, appid_file):
+    """Publish articles to WeChat Official Account."""
+    ctx.ensure_object(dict)
+    # Read acount identity
+    AppID = appid_file.readline().strip()
+    AppSecret = appid_file.readline().strip()
+    # Get acess token
+    token = AccessToken(AppID, AppSecret)
+    ctx.obj["token"] = token
 
 
-def find_all_images_in_md(markdown_data):
-    md = markdown.Markdown(extensions=[ImgExtExtension()])
-    md.convert(markdown_data)
-    return md.images
-
-
-def get_appid_secret(appid_file):
-    with open(appid_file, "r") as apf:
-        AppID = apf.readline().strip()
-        AppSecret = apf.readline().strip()
-    return AppID, AppSecret
-
-
-def markdown_to_html(markdown_text):
-    md = markdown.Markdown(extensions=[ImgExtExtension()])
-    return md.convert(markdown_text)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description="Publish articles to Internet.")
-    parser.add_argument("-i", "--appid-file", default="appid.txt",
-                        help="Your account identity.")
-    parser.add_argument("-t", "--title", help="Your account identity.")
-    parser.add_argument(
-        "index_file",
-        help="The index file that contains the article to be published.")
-    args = parser.parse_args()
-
-    identity = get_appid_secret(args.appid_file)
-    access_token = get_access_token(identity)
+@wechat.command()
+@click.argument("index_file", type=click.Path(exists=True, readable=True))
+@click.pass_context
+def procmd(ctx, index_file):
+    token = ctx.obj["token"]
     # Upload markdown images
-    with open(args.index_file) as inf:
-        index_dirname = os.path.dirname(args.index_file)
+    with open(index_file, "r", encoding="utf-8") as inf:
+        index_dirname = os.path.dirname(index_file)
+        index_basename = os.path.basename(index_file)
+        index_name = os.path.splitext(index_basename)[0]
+        cache_json_file = os.path.join(
+            index_dirname, "%s_uploaded_imgs.json" % index_name)
+        processed_md_file = os.path.join(
+            index_dirname, "%s_processed.md" % index_name)
         markdown_data = inf.read()
         images = find_all_images_in_md(markdown_data)
-        # These images won't be uploaded to material, so they can not be queried
-        #   through material API.
+        # These images won't be uploaded to material, so they can not be
+        # queried through material API.
         try:
-            with open(os.path.join(index_dirname, "uploaded_imgs.json"), 'r') as fh:
+            with open(cache_json_file, 'r') as fh:
                 uploaded_imgs = json.load(fh)
         except FileNotFoundError:
             uploaded_imgs = dict()
-
+        # Upload and convert markdown image links
         for image in images:
             if image in uploaded_imgs:
                 # Get img url from cache
@@ -85,15 +68,15 @@ if __name__ == '__main__':
             else:
                 # Upload img and cache url
                 print("Uploading image: %s" % image)
-                img_json = upload_image(access_token,
+                img_json = upload_image(token.get_access_token(),
                                         os.path.join(index_dirname, image))
                 img_url = img_json["url"]
                 uploaded_imgs[image] = img_url
                 print(img_url)
                 markdown_data = markdown_data.replace(image, img_url)
         # Write image url cache
-        with open(os.path.join(index_dirname, "uploaded_imgs.json"), 'w') as fh:
+        with open(cache_json_file, 'w') as fh:
             json.dump(uploaded_imgs, fh)
         # Write processed markdown file
-        with open(os.path.join(index_dirname, "processed.md"), 'w') as f:
+        with open(processed_md_file, 'w', encoding="utf-8") as f:
             f.write(markdown_data)
