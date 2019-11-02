@@ -120,9 +120,12 @@ def pack(markdown_files, dest_folder):
                 pass
             else:
                 click.echo("Image does not exists: %s" % image)
+                # TODO: download online images
                 continue
             img_dest_filename = os.path.join(
                 md_index_res_folder, os.path.basename(image))
+            img_src_filename = os.path.normpath(img_src_filename)
+            click.echo("Copying image: %s" % img_src_filename)
             shutil.copyfile(img_src_filename, img_dest_filename)
             # Relative to markdown index file
             img_dest_rel_filename = "index_files/%s" % os.path.basename(image)
