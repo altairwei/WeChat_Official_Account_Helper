@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
 import os
+import shutil
+import pathlib
 import json
 import html
 import urllib
 import argparse
 import click
 import requests
+from pathlib import Path
 
 from wizpublishtool.api.wechat.material import (
     get_access_token, query_image, upload_image)
@@ -80,3 +83,50 @@ def procmd(ctx, index_file):
         # Write processed markdown file
         with open(processed_md_file, 'w', encoding="utf-8") as f:
             f.write(markdown_data)
+
+
+@wizpub.command()
+@click.argument(
+    "markdown_files", type=click.File('r', encoding="utf-8"),
+    nargs=-1)
+@click.argument("dest_folder", nargs=1, type=click.Path())
+def pack(markdown_files, dest_folder):
+    """Parsing markdown and package it to a directory."""
+    # Create destination folder if needed
+    os.makedirs(dest_folder, exist_ok=True)
+    # Parse all markdown files
+    for md_file in markdown_files:
+        # Create markdown package folder
+        md_dirname = os.path.dirname(md_file.name)
+        md_basename = os.path.basename(md_file.name)
+        folder_name = os.path.splitext(md_basename)[0]
+        md_index_prefix = os.path.join(dest_folder, folder_name)
+        os.makedirs(md_index_prefix, exist_ok=True)
+        # Collect all images
+        md_index_filename = os.path.join(md_index_prefix, md_basename)
+        md_text = md_file.read()
+        md_images = find_all_images_in_md(md_text)
+        # Save images to package folder
+        md_index_res_folder = os.path.join(md_index_prefix, "index_files")
+        os.makedirs(md_index_res_folder, exist_ok=True)
+        for image in md_images:
+            # Image usually is relative to markdown index file
+            img_src_rel_filename = os.path.join(md_dirname, image)
+            if os.path.exists(img_src_rel_filename):
+                img_src_filename = img_src_rel_filename
+            elif os.path.exists(image):
+                # Absolute path of image
+                img_src_filename = image
+                pass
+            else:
+                click.echo("Image does not exists: %s" % image)
+                continue
+            img_dest_filename = os.path.join(
+                md_index_res_folder, os.path.basename(image))
+            shutil.copyfile(img_src_filename, img_dest_filename)
+            # Relative to markdown index file
+            img_dest_rel_filename = "index_files/%s" % os.path.basename(image)
+            md_text = md_text.replace(image, img_dest_rel_filename)
+        # Save markdown to package folder
+        with open(md_index_filename, 'w', encoding="utf-8") as outf:
+            outf.write(md_text)
