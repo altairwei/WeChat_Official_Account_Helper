@@ -88,10 +88,23 @@ def procmd(ctx, index_file):
 @wizpub.command()
 @click.argument(
     "markdown_files", type=click.File('r', encoding="utf-8"),
-    nargs=-1)
+    nargs=-1, required=True)
 @click.argument("dest_folder", nargs=1, type=click.Path())
 def pack(markdown_files, dest_folder):
-    """Parsing markdown and package it to a directory."""
+    """
+    Parse markdown file and package it to a directory.
+
+    MARKDOWN_FILES accept any number of markdown files, and they will be
+    processed sequentially. DEST_FOLDER is where markdown package folder will
+    be placed on.
+
+    Examples:
+
+        wizpub pack path/to/Hello.md path/to/World.md ~/Desktop
+
+        wizpub pack path/to/*.md ~/Desktop
+
+    """
     # Create destination folder if needed
     os.makedirs(dest_folder, exist_ok=True)
     # Parse all markdown files
