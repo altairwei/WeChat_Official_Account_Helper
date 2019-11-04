@@ -7,9 +7,10 @@ import json
 import html
 import urllib
 import argparse
+from pathlib import Path
+
 import click
 import requests
-from pathlib import Path
 
 from wizpublishtool.api.wechat.material import (
     get_access_token, query_image, upload_image)
