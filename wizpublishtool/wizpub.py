@@ -87,11 +87,13 @@ def procmd(ctx, index_file):
 
 
 @wizpub.command()
+@click.option("--res-folder", default="index_files", show_default=True,
+              help="Define the name of resources folder.")
 @click.argument(
     "markdown_files", type=click.File('r', encoding="utf-8"),
     nargs=-1, required=True)
 @click.argument("dest_folder", nargs=1, type=click.Path())
-def pack(markdown_files, dest_folder):
+def pack(markdown_files, dest_folder, res_folder):
     """
     Parse markdown file and package it to a directory.
 
@@ -121,7 +123,7 @@ def pack(markdown_files, dest_folder):
         md_text = md_file.read()
         md_images = find_all_images_in_md(md_text)
         # Save images to package folder
-        md_index_res_folder = os.path.join(md_index_prefix, "index_files")
+        md_index_res_folder = os.path.join(md_index_prefix, res_folder)
         os.makedirs(md_index_res_folder, exist_ok=True)
         for image in md_images:
             # Image usually is relative to markdown index file
@@ -142,7 +144,8 @@ def pack(markdown_files, dest_folder):
             click.echo("Copying image: %s" % img_src_filename)
             shutil.copyfile(img_src_filename, img_dest_filename)
             # Relative to markdown index file
-            img_dest_rel_filename = "index_files/%s" % os.path.basename(image)
+            # TODO: Let the user decide whether to put ./ in front of it.
+            img_dest_rel_filename = "./%s/%s" % (res_folder, os.path.basename(image))
             md_text = md_text.replace(image, img_dest_rel_filename)
         # Save markdown to package folder
         with open(md_index_filename, 'w', encoding="utf-8") as outf:
