@@ -104,7 +104,7 @@ def pack(markdown_files, dest_folder, res_folder):
     Examples:
 
         wizpub pack path/to/Hello.md path/to/World.md ~/Desktop
-
+        
         wizpub pack path/to/*.md ~/Desktop
 
     """
@@ -124,7 +124,8 @@ def pack(markdown_files, dest_folder, res_folder):
         md_images = find_all_images_in_md(md_text)
         # Save images to package folder
         md_index_res_folder = os.path.join(md_index_prefix, res_folder)
-        os.makedirs(md_index_res_folder, exist_ok=True)
+        if md_images:
+            os.makedirs(md_index_res_folder, exist_ok=True)
         for image in md_images:
             # Image usually is relative to markdown index file
             img_src_rel_filename = os.path.join(md_dirname, image)
