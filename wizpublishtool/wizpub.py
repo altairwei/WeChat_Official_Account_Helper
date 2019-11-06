@@ -25,14 +25,18 @@ def wizpub():
 
 @wizpub.group()
 @click.option(
-    "-i", "--appid-file", default="appid.txt", type=click.File(mode="r"))
+    "-i", "--appid-file", type=click.File(mode="r"))
 @click.pass_context
 def wechat(ctx, appid_file):
     """Publish articles to WeChat Official Account."""
     ctx.ensure_object(dict)
     # Read acount identity
-    AppID = appid_file.readline().strip()
-    AppSecret = appid_file.readline().strip()
+    if appid_file:
+        AppID = appid_file.readline().strip()
+        AppSecret = appid_file.readline().strip()
+    else:
+        AppID = click.prompt('AppID')
+        AppSecret = click.prompt('AppSecret', hide_input=True)
     # Get acess token
     token = AccessToken(AppID, AppSecret)
     ctx.obj["token"] = token
