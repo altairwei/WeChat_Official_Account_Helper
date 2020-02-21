@@ -8,22 +8,25 @@ import html
 import urllib
 import argparse
 from pathlib import Path
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import TCPServer
 
 import click
 import requests
 
-from wizpublishtool.api.wechat.material import (
+from docpub.api.wechat.material import (
     get_access_token, query_image, upload_image)
-from wizpublishtool.api.wechat.access_token import AccessToken
-from wizpublishtool.format.markdown import find_all_images_in_md
+from docpub.api.wechat.access_token import AccessToken
+from docpub.api.yuque.handler import YuqueAttachmentHandler
+from docpub.format.markdown import find_all_images_in_md
 
 
 @click.group()
-def wizpub():
+def cli():
     pass
 
 
-@wizpub.group()
+@cli.group()
 @click.option(
     "-i", "--appid-file", type=click.File(mode="r"))
 @click.pass_context
@@ -40,6 +43,18 @@ def wechat(ctx, appid_file):
     # Get acess token
     token = AccessToken(AppID, AppSecret)
     ctx.obj["token"] = token
+
+
+@cli.group()
+def yuque():
+    pass
+
+
+@yuque.command()
+def serve():
+    with TCPServer(("127.0.0.1", 80), YuqueAttachmentHandler) as httpd:
+        print("serving at port: ", 80)
+        httpd.serve_forever()
 
 
 @wechat.command()
@@ -90,7 +105,7 @@ def procmd(ctx, index_file):
             f.write(markdown_data)
 
 
-@wizpub.command()
+@cli.command()
 @click.option("--res-folder", default="index_files", show_default=True,
               help="Define the name of resources folder.")
 @click.argument(
@@ -107,9 +122,9 @@ def pack(markdown_files, dest_folder, res_folder):
 
     Examples:
 
-        wizpub pack path/to/Hello.md path/to/World.md ~/Desktop
-        
-        wizpub pack path/to/*.md ~/Desktop
+        docpub pack path/to/Hello.md path/to/World.md ~/Desktop
+
+        docpub pack path/to/*.md ~/Desktop
 
     """
     # Create destination folder if needed
@@ -150,7 +165,8 @@ def pack(markdown_files, dest_folder, res_folder):
             shutil.copyfile(img_src_filename, img_dest_filename)
             # Relative to markdown index file
             # TODO: Let the user decide whether to put ./ in front of it.
-            img_dest_rel_filename = "./%s/%s" % (res_folder, os.path.basename(image))
+            img_dest_rel_filename = "./%s/%s" % (
+                res_folder, os.path.basename(image))
             md_text = md_text.replace(image, img_dest_rel_filename)
         # Save markdown to package folder
         with open(md_index_filename, 'w', encoding="utf-8") as outf:

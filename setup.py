@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="WizPub",
+    name="docpub",
     version="0.0.1",
     packages=find_packages(),
     include_package_data=True,
@@ -12,6 +12,6 @@ setup(
     ],
     entry_points='''
         [console_scripts]
-        wizpub=wizpublishtool.wizpub:wizpub
+        docpub=docpub.cli:cli
     ''',
 )

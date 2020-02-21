@@ -3,7 +3,7 @@ import time
 import json
 import requests
 
-from wizpublishtool.api.wechat.wechat_resp import WechatResp
+from docpub.api.wechat.wechat_resp import WechatResp
 
 ACESS_TOKEN_API_URL = (
     "https://api.weixin.qq.com/cgi-bin/token?grant_type="
