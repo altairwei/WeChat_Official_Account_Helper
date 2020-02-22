@@ -8,7 +8,8 @@ setup(
     install_requires=[
         "click",
         "requests",
-        "markdown"
+        "markdown",
+        "confuse"
     ],
     entry_points='''
         [console_scripts]

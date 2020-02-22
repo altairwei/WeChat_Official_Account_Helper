@@ -8,22 +8,35 @@ import html
 import urllib
 import argparse
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from socketserver import TCPServer
 
 import click
 import requests
+import confuse
 
 from docpub.api.wechat.material import (
     get_access_token, query_image, upload_image)
 from docpub.api.wechat.access_token import AccessToken
-from docpub.api.yuque.handler import YuqueAttachmentHandler
+from docpub.api.yuque.auth import auth, getToken
+from docpub.api.yuque import LARK_HOST
 from docpub.format.markdown import find_all_images_in_md
+from docpub.util.stringtool import randomString
+import docpub.util.settings as settings
 
 
 @click.group()
 def cli():
     pass
+
+
+@cli.group()
+def config():
+    pass
+
+
+@config.command()
+def show():
+    click.echo(settings.configfile)
+    click.echo(settings.config.dump())
 
 
 @cli.group()
@@ -51,10 +64,24 @@ def yuque():
 
 
 @yuque.command()
-def serve():
-    with TCPServer(("127.0.0.1", 80), YuqueAttachmentHandler) as httpd:
-        print("serving at port: ", 80)
-        httpd.serve_forever()
+def getauth():
+    # Get client id
+    try:
+        client_id = settings.config["API"]["yuque"]["client_id"].get()
+    except confuse.NotFoundError:
+        client_id = click.prompt('Client Id')
+        settings.config["API"]["yuque"]["client_id"].set(client_id)
+    # Get signed code
+    try:
+        code = settings.config["API"]["yuque"]["code"].get()
+        resp = getToken(client_id, LARK_HOST, code)
+    except confuse.NotFoundError:
+        client_secret = click.prompt('Client Secret', hide_input=True)
+        code = randomString(40)
+        resp = auth(client_id, client_secret, code, scope='repo,doc')
+        settings.config["API"]["yuque"]["code"].set(code)
+    settings.save_config()
+    click.echo(resp)
 
 
 @wechat.command()
