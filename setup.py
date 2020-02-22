@@ -1,8 +1,10 @@
 from setuptools import setup, find_packages
 
+from docpub import __version__
+
 setup(
     name="docpub",
-    version="0.0.1",
+    version=__version__,
     packages=find_packages(),
     include_package_data=True,
     install_requires=[

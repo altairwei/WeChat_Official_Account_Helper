@@ -13,10 +13,11 @@ import click
 import requests
 import confuse
 
+from docpub import __version__, USER_AGENT
 from docpub.api.wechat.material import (
     get_access_token, query_image, upload_image)
 from docpub.api.wechat.access_token import AccessToken
-from docpub.api.yuque.auth import auth, getToken
+from docpub.api.yuque.auth import get_token, setup_auth
 from docpub.api.yuque import LARK_HOST
 from docpub.format.markdown import find_all_images_in_md
 from docpub.util.stringtool import randomString
@@ -24,6 +25,7 @@ import docpub.util.settings as settings
 
 
 @click.group()
+@click.version_option(version=__version__)
 def cli():
     pass
 
@@ -64,24 +66,36 @@ def yuque():
 
 
 @yuque.command()
-def getauth():
-    # Get client id
-    try:
-        client_id = settings.config["API"]["yuque"]["client_id"].get()
-    except confuse.NotFoundError:
-        client_id = click.prompt('Client Id')
-        settings.config["API"]["yuque"]["client_id"].set(client_id)
-    # Get signed code
-    try:
-        code = settings.config["API"]["yuque"]["code"].get()
-        resp = getToken(client_id, LARK_HOST, code)
-    except confuse.NotFoundError:
-        client_secret = click.prompt('Client Secret', hide_input=True)
-        code = randomString(40)
-        resp = auth(client_id, client_secret, code, scope='repo,doc')
-        settings.config["API"]["yuque"]["code"].set(code)
-    settings.save_config()
-    click.echo(resp)
+@click.option("--scope", default="repo,doc")
+def setauth(scope):
+    setup_auth(scope)
+    click.echo(click.style("Success", fg="green"))
+
+
+@yuque.command()
+def hello():
+    token = get_token()
+    url = "%s/api/v2/hello" % LARK_HOST
+    headers = {
+        'User-Agent': USER_AGENT,
+        'X-Auth-Token': token
+    }
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    click.echo(resp.json())
+
+
+@yuque.command()
+def user():
+    token = get_token()
+    url = "%s/api/v2/user" % LARK_HOST
+    headers = {
+        'User-Agent': USER_AGENT,
+        'X-Auth-Token': token
+    }
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    click.echo(resp.text)
 
 
 @wechat.command()
